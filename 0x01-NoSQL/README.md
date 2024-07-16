@@ -1,0 +1,1 @@
+Thi sdirectory contains scripts, the contents of which are solutions to the Alx 0x01. NoSQL task.
