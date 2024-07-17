@@ -3,6 +3,18 @@
 import redis
 import uuid
 from typing import Union, Callable, Optional
+from functools import wraps
+
+
+def count_calls(method: Callable) -> Callable:
+    """Decorator to count calls to a method"""
+    @wraps(method)
+    def wrapper(self, *args, **kwargs):
+        """Increment the count for the method and call the original method"""
+        key = method.__qualname__
+        self._redis.incr(key)
+        return method(self, *args, **kwargs)
+    return wrapper
 
 
 class Cache:
