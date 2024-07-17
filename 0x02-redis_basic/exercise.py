@@ -17,6 +17,27 @@ def count_calls(method: Callable) -> Callable:
     return wrapper
 
 
+def call_history(method: Callable) -> Callable:
+    """Decorator to store the history of inputs and outputs for a function"""
+    @wraps(method)
+    def wrapper(self, *args, **kwargs):
+        """Store input arguments and output in Redis lists"""
+        input_key = f"{method.__qualname__}:inputs"
+        output_key = f"{method.__qualname__}:outputs"
+
+        # Store the input arguments in the Redis list
+        self._redis.rpush(input_key, str(args))
+
+        # Call the original method and get the output
+        output = method(self, *args, **kwargs)
+
+        # Store the output in the Redis list
+        self._redis.rpush(output_key, str(output))
+
+        return output
+    return wrapper
+
+
 class Cache:
     def __init__(self):
         """Initialize the Cache instance"""
@@ -32,7 +53,9 @@ class Cache:
         return key
 
     def get(self, key: str, fn: Optional[Callable] = None) -> Union[str, bytes, int, float, None]:
-            """Retrieve data from Redis and optionally apply a conversion function"""
+            """Retrieve data from Redis and optionally
+            apply a conversion function
+            """
             data = self._redis.get(key)
             if data is not None and fn is not None:
                 return fn(data)
