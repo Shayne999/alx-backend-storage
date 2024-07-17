@@ -18,48 +18,34 @@ def count_calls(method: Callable) -> Callable:
 
 
 def call_history(method: Callable) -> Callable:
-    """Decorator to store the history of inputs and outputs for a function"""
+    """Tracks the call details of a method in a Cache class.
+    """
     @wraps(method)
-    def wrapper(self, *args, **kwargs):
-        """Store input arguments and output in Redis lists"""
-        input_key = f"{method.__qualname__}:inputs"
-        output_key = f"{method.__qualname__}:outputs"
-
-        # Store the input arguments in the Redis list
-        self._redis.rpush(input_key, str(args))
-
-        # Call the original method and get the output
+    def invoker(self, *args, **kwargs) -> Any:
+        '''Returns the method's output after storing its inputs and output.
+        '''
+        in_key = '{}:inputs'.format(method.__qualname__)
+        out_key = '{}:outputs'.format(method.__qualname__)
+        if isinstance(self._redis, redis.Redis):
+            self._redis.rpush(in_key, str(args))
         output = method(self, *args, **kwargs)
-
-        # Store the output in the Redis list
-        self._redis.rpush(output_key, str(output))
-
+        if isinstance(self._redis, redis.Redis):
+            self._redis.rpush(out_key, output)
         return output
-    return wrapper
+    return invoker
 
-def replay(fn: Callable) -> None:
+def replay(method: Callable):
     """Display the history of calls of a particular function"""
-    if fn is None or not hasattr(fn, '__self__'):
-        return
-    redis_store = getattr(fn.__self__, '_redis', None)
-    if not isinstance(redis_store, redis.Redis):
-        return
-    fxn_name = fn.__qualname__
-    in_key = '{}:inputs'.format(fxn_name)
-    out_key = '{}:outputs'.format(fxn_name)
-    fxn_call_count = 0
-    if redis_store.exists(fxn_name) != 0:
-        fxn_call_count = int(redis_store.get(fxn_name))
-    print('{} was called {} times:'.format(fxn_name, fxn_call_count))
-    fxn_inputs = redis_store.lrange(in_key, 0, -1)
-    fxn_outputs = redis_store.lrange(out_key, 0, -1)
-    for fxn_input, fxn_output in zip(fxn_inputs, fxn_outputs):
-        print('{}(*{}) -> {}'.format(
-            fxn_name,
-            fxn_input.decode("utf-8"),
-            fxn_output,
-        ))
-
+    redis_instance = method.__self__._redis
+    input_key = f"{method.__qualname__}:inputs"
+    output_key = f"{method.__qualname__}:outputs"
+    
+    inputs = redis_instance.lrange(input_key, 0, -1)
+    outputs = redis_instance.lrange(output_key, 0, -1)
+    
+    print(f"{method.__qualname__} was called {len(inputs)} times:")
+    for input, output in zip(inputs, outputs):
+        print(f"{method.__qualname__}(*{input.decode('utf-8')}) -> {output.decode('utf-8')}")
 
 class Cache:
     def __init__(self):
